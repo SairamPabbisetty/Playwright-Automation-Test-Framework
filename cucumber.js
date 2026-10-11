@@ -1,4 +1,11 @@
-﻿module.exports = {
+﻿
+const path = require("node:path");
+
+const reportDir = process.env.REPORT_DIR
+  ? path.resolve(process.env.REPORT_DIR)
+  : path.resolve("reports", "manual-run");
+
+module.exports = {
   default: {
     paths: ["features/**/*.feature"],
     requireModule: ["ts-node/register"],
@@ -9,7 +16,7 @@
     ],
     format: [
       "progress",
-      "json:reports/cucumber-report.json"
+      `json:${path.relative(process.cwd(), path.join(reportDir, "cucumber-report.json"))}`
     ],
     publishQuiet: true,
     setDefaultTimeout: 30000

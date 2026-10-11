@@ -4,8 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test",
-    "test:cucumber": "cucumber-js"
+    "test": "node scripts/run-cucumber.js"
   },
   "keywords": [],
   "author": "",
