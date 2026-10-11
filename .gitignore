@@ -1,0 +1,9 @@
+﻿node_modules/
+playwright-report/
+test-results/
+reports/
+.env
+.env.*
+!.env.example
+Playwright-Automation-Test-Framework-Repo/
+Playwright-Automation-Test-Framework/
