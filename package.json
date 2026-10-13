@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node scripts/run-cucumber.js"
+    "setup": "npm ci && npx playwright install chromium",
+    "test": "node scripts/run-cucumber.js --tag=@SmokeTest --headless=false"
   },
   "keywords": [],
   "author": "",

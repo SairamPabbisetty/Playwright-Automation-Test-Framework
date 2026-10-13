@@ -1,5 +1,7 @@
-﻿Feature: Homepage title validation
+﻿@SmokeTest
+@HomePage
+Feature: Homepage title validation
 
   Scenario: Verify the Automation Exercise homepage title
-    Given HomePage: Navigate to Automation Exercise homepage
-    Then HomePage: The homepage title should contain "Automation Exercise"
+    Given HomePage: User navigate to Automation Exercise homepage
+    Then HomePage: User validates the homepage title should contain "Automation Exercise"
