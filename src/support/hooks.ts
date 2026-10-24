@@ -8,6 +8,7 @@ import { HomePage } from "../pages/HomePage.page.";
 import { LoginSignup } from "../pages/LoginSignup.page";
 import { Signup } from "../pages/Signup.page";
 import type { CustomWorld } from "./world";
+import { AccountCreated } from "../pages/AccountCreated.page";
 
 setDefaultTimeout(30_000);
 
@@ -31,6 +32,7 @@ Before(async function (this: CustomWorld) {
     this.homePage = new HomePage(this.page);
     this.loginSignup = new LoginSignup(this.page);
     this.signup = new Signup(this.page);
+    this.accountCreated = new AccountCreated(this.page);
   } catch (error) {
     try {
       await this.context?.close();
@@ -42,6 +44,7 @@ Before(async function (this: CustomWorld) {
       this.homePage = undefined;
       this.loginSignup = undefined;
       this.signup = undefined;
+      this.accountCreated = undefined;
     }
 
     throw error;
@@ -61,6 +64,7 @@ After(async function (this: CustomWorld) {
       this.homePage = undefined;
       this.loginSignup = undefined;
       this.signup = undefined;
+      this.accountCreated = undefined;
     }
   }
 });

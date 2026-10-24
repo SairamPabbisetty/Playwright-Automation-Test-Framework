@@ -21,3 +21,11 @@ Then("HomePage: User clicks on the {string} link", async function (this: CustomW
   }
   await this.homePage.clickLink(name);
 })
+
+Then('HomePage: User verifies the logged in username is {string}', async function (this: CustomWorld, username: string) {
+  if (!this.homePage) {
+    throw new Error("RegisterUserPage is not initialized");
+  }
+
+  await this.homePage.verifyLoggedInUsername(username);
+});

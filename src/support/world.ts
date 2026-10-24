@@ -3,6 +3,7 @@ import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { HomePage } from "../pages/HomePage.page.";
 import { LoginSignup } from "../pages/LoginSignup.page";
 import { Signup } from "../pages/Signup.page";
+import { AccountCreated } from "../pages/AccountCreated.page";
 
 export class CustomWorld extends World {
   browser?: Browser;
@@ -11,6 +12,7 @@ export class CustomWorld extends World {
   homePage?: HomePage;
   loginSignup?: LoginSignup;
   signup?: Signup;
+  accountCreated?: AccountCreated;
 }
 
 setWorldConstructor(CustomWorld);

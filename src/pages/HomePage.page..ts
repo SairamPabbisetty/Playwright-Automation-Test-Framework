@@ -25,4 +25,8 @@ export class HomePage {
   async clickLink(name: string): Promise<void> {
     await this.homePagemodel.link(name).click();
   }
+
+  async verifyLoggedInUsername(username: string): Promise<void> {
+    await expect(this.homePagemodel.loggedInUsername(username)).toBeVisible();
+  }
 }
