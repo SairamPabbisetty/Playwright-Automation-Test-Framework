@@ -4,7 +4,9 @@
   setDefaultTimeout,
 } from "@cucumber/cucumber";
 import { chromium } from "@playwright/test";
-import { HomePage } from "../pages/HomePage";
+import { HomePage } from "../pages/HomePage.page.";
+import { LoginSignup } from "../pages/LoginSignup.page";
+import { Signup } from "../pages/Signup.page";
 import type { CustomWorld } from "./world";
 
 setDefaultTimeout(30_000);
@@ -27,6 +29,8 @@ Before(async function (this: CustomWorld) {
     this.context = await this.browser.newContext();
     this.page = await this.context.newPage();
     this.homePage = new HomePage(this.page);
+    this.loginSignup = new LoginSignup(this.page);
+    this.signup = new Signup(this.page);
   } catch (error) {
     try {
       await this.context?.close();
@@ -36,6 +40,8 @@ Before(async function (this: CustomWorld) {
       this.context = undefined;
       this.page = undefined;
       this.homePage = undefined;
+      this.loginSignup = undefined;
+      this.signup = undefined;
     }
 
     throw error;
@@ -53,6 +59,8 @@ After(async function (this: CustomWorld) {
       this.page = undefined;
       this.browser = undefined;
       this.homePage = undefined;
+      this.loginSignup = undefined;
+      this.signup = undefined;
     }
   }
 });
