@@ -8,7 +8,8 @@ A TypeScript UI automation framework for [Automation Exercise](https://automatio
 - Cucumber step definitions written in TypeScript.
 - Page objects and locator models that keep browser interactions out of step definitions.
 - Per-scenario browser setup and teardown through Cucumber hooks.
-- Chromium execution in headed or headless mode.
+- Chrome or Microsoft Edge execution in headed or headless mode.
+- Optional Selenium Grid availability validation.
 - Timestamped HTML reports for Cucumber runs.
 - A Playwright Test smoke test with HTML reporting, screenshots, and traces on failure.
 - Strict TypeScript compiler settings for the test and framework source.
@@ -20,11 +21,11 @@ A TypeScript UI automation framework for [Automation Exercise](https://automatio
 | Node.js and npm | Runtime and dependency management |
 | TypeScript | Test, page-object, and framework implementation |
 | Playwright | Browser automation and assertions |
-| Chromium | Browser used by the Cucumber and Playwright Test suites |
+| Chromium / Microsoft Edge | Browsers supported by the Cucumber suite |
 | Cucumber.js | BDD test runner |
 | Gherkin | Human-readable feature and scenario definitions |
 | `ts-node` | Loads TypeScript files while Cucumber runs |
-| `multiple-cucumber-html-reporter` | Declared reporting dependency for Cucumber reporting |
+| `multiple-cucumber-html-reporter` | Reporting dependency retained by the project |
 
 ## Project structure
 
@@ -94,7 +95,9 @@ Playwright browser
 Cucumber JSON → generated HTML report
 ```
 
-`src/support/hooks.ts` launches Chromium before each scenario, creates the browser context and page objects, and closes all resources afterward. `src/support/world.ts` exposes those objects to step definitions through the custom Cucumber World.
+`src/support/hooks.ts` launches a browser before each scenario, creates the browser context and page objects, and closes all resources afterward. Chrome is launched by default; Microsoft Edge is selected with `--browser=edge`. The `HEADLESS` environment variable controls headed/headless mode and defaults to headless when it is not set. `src/support/world.ts` exposes the browser and page objects to step definitions through the custom Cucumber World.
+
+The Cucumber runner also accepts `--grid=<url>`. It checks the Grid `/status` endpoint before starting the suite and stops execution if the Grid is unavailable. The current hooks still launch the configured local Playwright browser after that check; the Grid URL is not currently used to create a remote Playwright connection.
 
 Page objects represent the user-facing areas used by the current registration flow:
 
@@ -122,7 +125,9 @@ The Playwright Test configuration enables:
 
 - Node.js and npm.
 - Git.
-- Internet access for npm packages and the Chromium browser binary.
+- Internet access for npm packages, the Chromium browser binary, and the Automation Exercise site.
+- Microsoft Edge installed locally when using `--browser=edge`.
+- A reachable Selenium Grid `/status` endpoint when using `--grid`.
 - VS Code is recommended, but not required.
 
 Use a current Node.js LTS release where possible. The project is currently developed with Node.js 24.21.0.
@@ -157,21 +162,23 @@ npm test
 The `test` script runs:
 
 ```text
-node scripts/run-cucumber.js --tag=@RegisterUser --headless=false
+node scripts/run-cucumber.js --tag=@RegisterUser --headless=false --browser=edge --grid=http://localhost:4444
 ```
 
-This executes the `@RegisterUser` scenario in headed Chromium mode. The scenario creates a user with the data in `features/ui/RegisterUser.feature`, verifies the account, and deletes the account at the end.
+This executes the `@RegisterUser` scenario in headed Microsoft Edge mode after checking that Selenium Grid is available at `http://localhost:4444`. The scenario creates a user with the data in `features/ui/RegisterUser.feature`, verifies the account, and deletes the account at the end. Because the current hooks use a local Playwright launch, Edge runs locally after the Grid check.
 
-### Run Cucumber with a different tag or browser mode
+### Run Cucumber with a different tag, browser, or execution mode
 
-The runner accepts `--tag` and `--headless` options:
+The runner accepts `--tag`, `--headless`, `--browser`, and `--grid` options:
 
 ```powershell
 node scripts/run-cucumber.js --tag="@SmokeTest" --headless=true
 node scripts/run-cucumber.js --tag="@HomePage" --headless=false
+node scripts/run-cucumber.js --tag="@SmokeTest" --browser=edge --headless=true
+node scripts/run-cucumber.js --tag="@SmokeTest" --browser=chrome --headless=true --grid=http://localhost:4444
 ```
 
-Use `--headless=true` or `--headless=false` explicitly. The Cucumber hooks default to headless mode when `HEADLESS` is not set.
+Use `--headless=true` or `--headless=false` explicitly. The supported browser values are `chrome` and `edge`; Chrome is the default. The Cucumber hooks default to headless mode when `HEADLESS` is not set. `--grid` accepts an `http` or `https` URL, validates the Grid status, and aborts if the Grid is unavailable.
 
 Available tags in the current feature files are:
 
@@ -191,6 +198,8 @@ node scripts/run-cucumber.js --headless=true
 npx playwright test
 ```
 
+The standalone Playwright Test suite always runs headless Chromium against `https://automationexercise.com`; its settings are independent of the Cucumber runner's browser, headless, and Grid options.
+
 Useful Playwright Test commands:
 
 ```powershell
@@ -198,8 +207,6 @@ npx playwright test tests/smoke.spec.ts
 npx playwright test --headed
 npx playwright show-report
 ```
-
-The Playwright Test suite uses the settings in `playwright.config.ts`, which are independent of the Cucumber runner and its `HEADLESS` environment variable.
 
 ## Cucumber reports
 
@@ -218,7 +225,7 @@ The directory name is generated from the local machine date and time as `reports
 2. Writes the temporary Cucumber JSON report there.
 3. Generates `report.html` using `scripts/generate-cucumber-report.js`.
 4. Removes the temporary JSON file after successful HTML generation.
-5. Opens the HTML report in the default Windows browser.
+5. Opens the HTML report in the default Windows browser when available.
 
 If the browser does not open automatically, open the generated `report.html` manually. The report shows scenario and step statuses, durations, totals, and failure details.
 
@@ -244,7 +251,7 @@ The compiler includes `src/**/*.ts`, `tests/**/*.ts`, and `features/**/*.ts` and
 | --- | --- |
 | `package.json` | Dependency manifest and `setup`/`test` npm scripts |
 | `cucumber.js` | Cucumber feature paths, TypeScript loading, hooks, step definitions, timeout, and JSON output |
-| `scripts/run-cucumber.js` | Tag/headless argument parsing, report directories, Cucumber launch, and report opening |
+| `scripts/run-cucumber.js` | Tag, browser, headless, and Grid argument parsing; report directories; Cucumber launch; and report opening |
 | `scripts/generate-cucumber-report.js` | Converts Cucumber JSON into the local HTML report |
 | `playwright.config.ts` | Playwright Test discovery, browser, URL, retries, workers, timeouts, and reporters |
 | `tsconfig.json` | Strict TypeScript compiler settings and included source paths |
@@ -280,8 +287,10 @@ The framework currently covers:
 - Logged-in username verification.
 - Account deletion.
 - A standalone homepage smoke test.
+- Local Chrome and Microsoft Edge execution for Cucumber scenarios.
+- Optional Selenium Grid availability validation before a Cucumber run.
 
-API testing, environment-specific configuration, CI/CD workflows, additional page objects, and expanded test data management are not currently implemented.
+Remote browser execution through Selenium Grid, API testing, environment-specific configuration, CI/CD workflows, additional page objects, and expanded test data management are not currently implemented.
 
 ## Repository
 

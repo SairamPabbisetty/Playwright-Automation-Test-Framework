@@ -21,6 +21,92 @@ if (headlessArg) {
   process.env.HEADLESS = value;
 }
 
+const browserArg = args.find((arg) =>
+  arg.startsWith("--browser=")
+);
+
+const supportedBrowsers = ["chrome", "edge"];
+
+let browserName = "chrome";
+
+if (browserArg) {
+  browserName = browserArg.split("=")[1].toLowerCase();
+
+  if (!supportedBrowsers.includes(browserName)) {
+    console.error(
+      `Invalid browser: ${browserName}. Supported browsers: ${supportedBrowsers.join(", ")}`
+    );
+    process.exit(1);
+  }
+}
+
+process.env.BROWSER = browserName;
+
+console.log(`Selected browser: ${browserName}`);
+
+const gridArg = args.find((arg) =>
+  arg.startsWith("--grid=")
+);
+
+let gridUrl;
+
+if (gridArg) {
+  gridUrl = gridArg.slice("--grid=".length).trim();
+
+  try {
+    const parsedUrl = new URL(gridUrl);
+
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      throw new Error("Invalid protocol");
+    }
+  } catch {
+    console.error("Invalid Grid URL. Example: --grid=http://localhost:4444");
+    process.exit(1);
+  }
+
+  process.env.SELENIUM_REMOTE_URL = gridUrl;
+
+  console.log(`Execution mode: Selenium Grid`);
+  console.log(`Grid URL: ${gridUrl}`);
+} else {
+  delete process.env.SELENIUM_REMOTE_URL;
+
+  console.log("Execution mode: Local");
+}
+
+
+async function validateGrid(gridUrl) {
+  try {
+    const statusUrl = new URL("/status", gridUrl);
+
+    const response = await fetch(statusUrl, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.value?.ready !== true) {
+      throw new Error("Selenium Grid is not ready");
+    }
+
+    console.log("Selenium Grid status: READY");
+    return true;
+
+  } catch (error) {
+    console.error("\nERROR: Selenium Grid is unavailable!");
+    console.error(`The provided Grid URL '${gridUrl}' is not reachable.`);
+    console.error("Please verify that Docker and Selenium Grid are running.");
+    console.error("\nTest execution aborted.");
+
+    return false;
+  }
+}
+
+
 const tagArg = args.find((arg) => arg.startsWith("--tag="));
 
 let tagExpression;
@@ -34,79 +120,95 @@ if (tagArg) {
   }
 }
 
-const now = new Date();
-const pad = (value) => String(value).padStart(2, "0");
+async function main() {
+  if (gridUrl) {
+    const isGridAvailable = await validateGrid(gridUrl);
 
-const year = String(now.getFullYear());
-const monthName = now.toLocaleString("en-US", { month: "long" });
-const timestamp =
-  `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${year}-` +
-  `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    if (!isGridAvailable) {
+      process.exitCode = 1;
+      return;
+    }
+  }
 
-const reportMonth = `${monthName.slice(0, 3)}${year}`;
-const reportDir = path.resolve("reports", reportMonth, timestamp);  
-fs.mkdirSync(reportDir, { recursive: true });
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
 
-const env = {
-  ...process.env,
-  REPORT_DIR: reportDir
-};
+  const year = String(now.getFullYear());
+  const monthName = now.toLocaleString("en-US", { month: "long" });
+  const timestamp =
+    `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${year}-` +
+    `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-console.log(`\nCucumber reports: ${reportDir}\n`);
+  const reportMonth = `${monthName.slice(0, 3)}${year}`;
+  const reportDir = path.resolve("reports", reportMonth, timestamp);
+  fs.mkdirSync(reportDir, { recursive: true });
 
-const cucumberArgs = [
-  "node_modules/@cucumber/cucumber/bin/cucumber.js",
-];
+  const env = {
+    ...process.env,
+    REPORT_DIR: reportDir,
+  };
 
-if (tagExpression) {
-  cucumberArgs.push("--tags", tagExpression);
-}
+  console.log(`\nCucumber reports: ${reportDir}\n`);
 
-const cucumber = spawnSync(
-  process.execPath,
-  cucumberArgs,
-  { stdio: "inherit", env }
-);
+  const cucumberArgs = [
+    "node_modules/@cucumber/cucumber/bin/cucumber.js",
+  ];
 
-if (cucumber.error) {
-  console.error("Failed to start Cucumber:", cucumber.error);
-  process.exit(1);
-}
+  if (tagExpression) {
+    cucumberArgs.push("--tags", tagExpression);
+  }
 
-let reportExitCode = 0;
-const jsonPath = path.join(reportDir, "cucumber-report.json");
-
-if (fs.existsSync(jsonPath)) {
-  const report = spawnSync(
+  const cucumber = spawnSync(
     process.execPath,
-    ["scripts/generate-cucumber-report.js"],
+    cucumberArgs,
     { stdio: "inherit", env }
   );
 
-  if (report.error || report.status !== 0) {
-    console.error("Failed to generate the HTML report.");
-    reportExitCode = 1;
-  } else {
-        fs.unlinkSync(jsonPath);
-        console.log("Temporary JSON report removed.");
+  if (cucumber.error) {
+    console.error("Failed to start Cucumber:", cucumber.error);
+    process.exit(1);
+  }
 
-        const htmlPath = path.join(reportDir, "report.html");
+  let reportExitCode = 0;
+  const jsonPath = path.join(reportDir, "cucumber-report.json");
 
-        if (fs.existsSync(htmlPath)) {
-            console.log("Opening HTML report in your default browser...");
+  if (fs.existsSync(jsonPath)) {
+    const report = spawnSync(
+      process.execPath,
+      ["scripts/generate-cucumber-report.js"],
+      { stdio: "inherit", env }
+    );
 
-            execFile("cmd", ["/c", "start", "", htmlPath], (error) => {
-                if (error) {
-                    console.error("Could not open the HTML report:", error.message);
-                    console.log(`Open it manually: ${htmlPath}`);
-                }
-            });
-        }
+    if (report.error || report.status !== 0) {
+      console.error("Failed to generate the HTML report.");
+      reportExitCode = 1;
+    } else {
+      fs.unlinkSync(jsonPath);
+      console.log("Temporary JSON report removed.");
+
+      const htmlPath = path.join(reportDir, "report.html");
+
+      if (fs.existsSync(htmlPath)) {
+        console.log("Opening HTML report in your default browser...");
+
+        execFile("cmd", ["/c", "start", "", htmlPath], (error) => {
+          if (error) {
+            console.error("Could not open the HTML report:", error.message);
+            console.log(`Open it manually: ${htmlPath}`);
+          }
+        });
+      }
     }
-} else {
-  console.error("Cucumber JSON report was not created.");
-  reportExitCode = 1;
+  } else {
+    console.error("Cucumber JSON report was not created.");
+    reportExitCode = 1;
+  }
+
+  process.exitCode =
+    cucumber.status === 0 && reportExitCode === 0 ? 0 : 1;
 }
 
-process.exitCode =
-  cucumber.status === 0 && reportExitCode === 0 ? 0 : 1;
+main().catch((error) => {
+  console.error("Test runner failed:", error);
+  process.exitCode = 1;
+});

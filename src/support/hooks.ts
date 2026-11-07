@@ -22,9 +22,18 @@ function getHeadlessMode(): boolean {
 }
 
 Before(async function (this: CustomWorld) {
-  this.browser = await chromium.launch({
-    headless: getHeadlessMode(),
-  });
+  const browserName = process.env.BROWSER || "chrome";
+
+  if (browserName === "edge") {
+    this.browser = await chromium.launch({
+      channel: "msedge",
+      headless: getHeadlessMode(),
+    });
+  } else {
+    this.browser = await chromium.launch({
+      headless: getHeadlessMode(),
+    });
+  }
 
   try {
     this.context = await this.browser.newContext();
