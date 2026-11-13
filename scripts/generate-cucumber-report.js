@@ -1,24 +1,51 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { getReportConfig } = require("../config/report.config");
 
-const reportDir = process.env.REPORT_DIR;
+// Load Report Configuration
+const reportConfig = getReportConfig();
 
-if (!reportDir) {
-  console.error("REPORT_DIR is not set.");
-  process.exit(1);
+const reportDir = reportConfig.reportDir;
+
+const jsonPath = path.join(
+  reportDir,
+  reportConfig.files.cucumberJson
+);
+
+const htmlPath = path.join(
+  reportDir,
+  reportConfig.files.html
+);
+
+// Check HTML Report Configuration
+if (!reportConfig.generate.html) {
+  console.log("HTML report generation is disabled.");
+  process.exit(0);
 }
 
-const jsonPath = path.join(reportDir, "cucumber-report.json");
-const htmlPath = path.join(reportDir, "report.html");
-
+// Validate Input JSON
 if (!fs.existsSync(jsonPath)) {
   console.error(`Cucumber JSON report not found: ${jsonPath}`);
   process.exit(1);
 }
 
-const features = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+// Read Cucumber JSON
+let features;
 
+try {
+  features = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+
+  if (!Array.isArray(features)) {
+    throw new Error("Expected the Cucumber report to be an array.");
+  }
+
+} catch (error) {
+  console.error("Failed to read Cucumber JSON:", error.message);
+  process.exit(1);
+}
+
+// HTML Escaping
 const escapeHtml = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -28,14 +55,21 @@ const escapeHtml = (value) =>
     "'": "&#39;"
   })[char]);
 
+// Step Status
 const statusOf = (step) => {
   const status = step.result?.status;
+
   if (status === "passed") return "passed";
   if (status === "failed") return "failed";
-  if (status === "undefined" || status === "ambiguous") return "undefined";
+
+  if (status === "undefined" || status === "ambiguous") {
+    return "undefined";
+  }
+
   return "skipped";
 };
 
+// Initialize Report Counts
 const counts = {
   passed: 0,
   failed: 0,
@@ -50,25 +84,37 @@ let scenarioSkipped = 0;
 
 const featureSections = [];
 
+// Process Features And Scenarios
 for (const feature of features) {
   const scenarios = [];
 
   for (const scenario of feature.elements ?? []) {
-    if (scenario.type !== "scenario" && scenario.type !== "scenario_outline") {
+    if (
+      scenario.type !== "scenario" &&
+      scenario.type !== "scenario_outline"
+    ) {
       continue;
     }
 
     scenarioCount++;
+
     const steps = scenario.steps ?? [];
+
     let scenarioHasFailure = false;
     let scenarioHasUndefined = false;
 
     const stepRows = steps.map((step) => {
       const status = statusOf(step);
+
       counts[status]++;
 
-      if (status === "failed") scenarioHasFailure = true;
-      if (status === "undefined") scenarioHasUndefined = true;
+      if (status === "failed") {
+        scenarioHasFailure = true;
+      }
+
+      if (status === "undefined") {
+        scenarioHasUndefined = true;
+      }
 
       const durationNs = step.result?.duration ?? 0;
       const duration = `${(durationNs / 1e9).toFixed(3)} s`;
@@ -85,15 +131,18 @@ for (const feature of features) {
               skipped: "—",
               undefined: "?"
             }[status]}</span>
+
             <div class="step-content">
               <div class="step-title">
                 <span class="keyword">${escapeHtml(keyword)}</span>
                 ${escapeHtml(text)}
               </div>
+
               <div class="step-meta">
                 <span class="badge ${status}">${status.toUpperCase()}</span>
                 <span>${duration}</span>
               </div>
+
               ${error ? `
                 <details class="error" open>
                   <summary>Error details</summary>
@@ -114,9 +163,13 @@ for (const feature of features) {
           ? "skipped"
           : "passed";
 
-    if (scenarioStatus === "passed") scenarioPassed++;
-    else if (scenarioStatus === "failed") scenarioFailed++;
-    else scenarioSkipped++;
+    if (scenarioStatus === "passed") {
+      scenarioPassed++;
+    } else if (scenarioStatus === "failed") {
+      scenarioFailed++;
+    } else {
+      scenarioSkipped++;
+    }
 
     scenarios.push(`
       <section class="scenario">
@@ -125,8 +178,12 @@ for (const feature of features) {
             <h3>${escapeHtml(scenario.name)}</h3>
             <p class="muted">${escapeHtml(scenario.keyword ?? "Scenario")}</p>
           </div>
-          <span class="badge ${scenarioStatus}">${scenarioStatus.toUpperCase()}</span>
+
+          <span class="badge ${scenarioStatus}">
+            ${scenarioStatus.toUpperCase()}
+          </span>
         </div>
+
         <div class="steps">${stepRows}</div>
       </section>
     `);
@@ -142,9 +199,15 @@ for (const feature of features) {
   }
 }
 
-const totalSteps = Object.values(counts).reduce((sum, count) => sum + count, 0);
+// Build Report Summary
+const totalSteps = Object.values(counts).reduce(
+  (sum, count) => sum + count,
+  0
+);
+
 const generatedAt = new Date().toLocaleString();
 
+// Build HTML Report
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -230,5 +293,12 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-heig
 </body>
 </html>`;
 
-fs.writeFileSync(htmlPath, html, "utf8");
-console.log(`HTML report generated: ${htmlPath}`);
+// Write HTML Report
+try {
+  fs.writeFileSync(htmlPath, html, "utf8");
+  console.log(`HTML report generated: ${htmlPath}`);
+
+} catch (error) {
+  console.error("Failed to generate HTML report:", error.message);
+  process.exit(1);
+}
