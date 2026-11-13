@@ -1,4 +1,4 @@
-﻿import { World, setWorldConstructor } from "@cucumber/cucumber";
+import { World, setWorldConstructor } from "@cucumber/cucumber";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { HomePage } from "../pages/HomePage.page.";
 import { LoginSignup } from "../pages/LoginSignup.page";

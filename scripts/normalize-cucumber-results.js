@@ -147,6 +147,17 @@ function normalizeScenario(feature, scenario) {
       item.keyword === "Before" ||
       item.keyword === "After";
 
+    const screenshots = (item.embeddings || [])
+      .filter(
+        (embedding) =>
+          embedding.mime_type?.startsWith("image/") &&
+          embedding.data
+      )
+      .map((embedding) => ({
+        mimeType: embedding.mime_type,
+        data: embedding.data,
+      }));
+
     const normalizedItem = {
       keyword: item.keyword || null,
       name: item.name || null,
@@ -155,6 +166,7 @@ function normalizeScenario(feature, scenario) {
       durationMs: normalizeDuration(item.result?.duration),
       errorMessage: normalizeError(item.result),
       hidden: item.hidden ?? false,
+      screenshots,
     };
 
     if (isHook) {

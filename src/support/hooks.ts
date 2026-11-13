@@ -1,6 +1,7 @@
-﻿import {
+import {
   Before,
   After,
+  AfterStep,
   setDefaultTimeout,
 } from "@cucumber/cucumber";
 import { chromium } from "@playwright/test";
@@ -57,6 +58,24 @@ Before(async function (this: CustomWorld) {
     }
 
     throw error;
+  }
+});
+
+AfterStep(async function (this: CustomWorld, { result }) {
+  if (result?.status === "FAILED" && this.page) {
+    try {
+      console.log("Step failed! Capturing screenshot...");
+
+      const screenshot = await this.page.screenshot({
+        fullPage: true,
+      });
+
+      await this.attach(screenshot, "image/png");
+
+      console.log("Failure screenshot attached to Cucumber report.");
+    } catch (error) {
+      console.error("Failed to capture or attach screenshot:", error);
+    }
   }
 });
 

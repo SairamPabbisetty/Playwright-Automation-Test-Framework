@@ -137,7 +137,7 @@ function main() {
     comparison
   );
 
-    // Save Comparison Results
+  // Save Comparison Results
   const comparisonDir = path.join(executionDir, "comparison");
 
   fs.mkdirSync(comparisonDir, { recursive: true });
@@ -532,13 +532,15 @@ function compareSteps(chromeScenario, edgeScenario) {
       chrome: {
         status: chromeStep.status,
         durationMs: chromeStep.durationMs,
-        errorMessage: chromeStep.errorMessage ?? null
+        errorMessage: chromeStep.errorMessage ?? null,
+        screenshots: chromeStep.screenshots ?? []
       },
 
       edge: {
         status: edgeStep.status,
         durationMs: edgeStep.durationMs,
-        errorMessage: edgeStep.errorMessage ?? null
+        errorMessage: edgeStep.errorMessage ?? null,
+        screenshots: edgeStep.screenshots ?? []
       },
 
       comparison: {
@@ -865,9 +867,9 @@ function buildComparisonResults(
   const totalScenarioDurationDifferencePercentage =
     totalChromeScenarioDurationMs > 0
       ? (
-          totalScenarioDurationDifferenceMs /
-          totalChromeScenarioDurationMs
-        ) * 100
+        totalScenarioDurationDifferenceMs /
+        totalChromeScenarioDurationMs
+      ) * 100
       : null;
 
   // Build Final Result
@@ -900,8 +902,8 @@ function buildComparisonResults(
             totalScenarioDurationDifferencePercentage === null
               ? null
               : Number(
-                  totalScenarioDurationDifferencePercentage.toFixed(2)
-                )
+                totalScenarioDurationDifferencePercentage.toFixed(2)
+              )
         }
       },
 

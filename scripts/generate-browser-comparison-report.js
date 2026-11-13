@@ -185,6 +185,39 @@ function renderError(error) {
   `;
 }
 
+function renderScreenshots(screenshots, browser) {
+  if (!Array.isArray(screenshots) || screenshots.length === 0) {
+    return "";
+  }
+
+  return screenshots
+    .map((screenshot, index) => {
+      const mimeType = screenshot.mimeType || "image/png";
+
+      if (
+        !mimeType.startsWith("image/") ||
+        !screenshot.data
+      ) {
+        return "";
+      }
+
+      return `
+        <details class="screenshot-details">
+          <summary>
+            View ${escapeHtml(browser)} screenshot ${index + 1}
+          </summary>
+
+          <img
+            class="failure-screenshot"
+            src="data:${escapeHtml(mimeType)};base64,${screenshot.data}"
+            alt="${escapeHtml(browser)} failure screenshot"
+          />
+        </details>
+      `;
+    })
+    .join("");
+}
+
 function renderMissingItems(items, label) {
   if (!Array.isArray(items) || items.length === 0) {
     return "";
@@ -195,18 +228,18 @@ function renderMissingItems(items, label) {
       <h4>${escapeHtml(label)} (${items.length})</h4>
       <ul>
         ${items
-          .map((item) => {
-            const name =
-              typeof item === "string"
-                ? item
-                : item?.name ??
-                  item?.identity ??
-                  item?.uri ??
-                  JSON.stringify(item);
+      .map((item) => {
+        const name =
+          typeof item === "string"
+            ? item
+            : item?.name ??
+            item?.identity ??
+            item?.uri ??
+            JSON.stringify(item);
 
-            return `<li>${escapeHtml(name)}</li>`;
-          })
-          .join("")}
+        return `<li>${escapeHtml(name)}</li>`;
+      })
+      .join("")}
       </ul>
     </div>
   `;
@@ -401,10 +434,14 @@ function renderComparisonTable(items, type) {
           <td>${formatDuration(getDifference(item))}</td>
 
           <td>
-            ${renderStatus(functionalResult)}
-            ${renderError(chrome.errorMessage)}
-            ${renderError(edge.errorMessage)}
-          </td>
+  ${renderStatus(functionalResult)}
+
+  ${renderError(chrome.errorMessage)}
+  ${renderScreenshots(chrome.screenshots, "Chrome")}
+
+  ${renderError(edge.errorMessage)}
+  ${renderScreenshots(edge.screenshots, "Edge")}
+</td>
         </tr>
       `;
     })
@@ -542,10 +579,10 @@ function renderFeatures(features) {
           </div>
 
           ${scenarios
-            .map((scenario, scenarioIndex) =>
-              renderScenario(scenario, scenarioIndex)
-            )
-            .join("")}
+          .map((scenario, scenarioIndex) =>
+            renderScenario(scenario, scenarioIndex)
+          )
+          .join("")}
 
           <div class="missing-grid">
             ${renderMissingItems(feature.missingInEdge, "Items missing in Edge")}
@@ -584,15 +621,15 @@ function renderUnmatchedItems(results) {
         <div class="missing-group">
           <h3>Unmatched Features (${unmatchedFeatures.length})</h3>
           ${unmatchedFeatures.length
-            ? `<pre>${escapeHtml(JSON.stringify(unmatchedFeatures, null, 2))}</pre>`
-            : `<p class="muted">None</p>`}
+      ? `<pre>${escapeHtml(JSON.stringify(unmatchedFeatures, null, 2))}</pre>`
+      : `<p class="muted">None</p>`}
         </div>
 
         <div class="missing-group">
           <h3>Unmatched Scenarios (${unmatchedScenarios.length})</h3>
           ${unmatchedScenarios.length
-            ? `<pre>${escapeHtml(JSON.stringify(unmatchedScenarios, null, 2))}</pre>`
-            : `<p class="muted">None</p>`}
+      ? `<pre>${escapeHtml(JSON.stringify(unmatchedScenarios, null, 2))}</pre>`
+      : `<p class="muted">None</p>`}
         </div>
       </div>
     </section>
@@ -1083,6 +1120,27 @@ function generateHtmlReport(results) {
       font-size: 12px;
     }
 
+    .screenshot-details {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.screenshot-details summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.failure-screenshot {
+  display: block;
+  width: 100%;
+  max-width: 650px;
+  height: auto;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
     .error-details summary {
       cursor: pointer;
       font-weight: 600;
@@ -1269,10 +1327,10 @@ function generateHtmlReport(results) {
         ${renderMetric("Matched Steps", summary.steps?.matched ?? 0)}
         ${renderMetric("Matched Hooks", summary.hooks?.matched ?? 0)}
         ${renderMetric(
-          "Status Mismatches",
-          totalMismatches,
-          totalMismatches === 0 ? "success-text" : "failure-text"
-        )}
+    "Status Mismatches",
+    totalMismatches,
+    totalMismatches === 0 ? "success-text" : "failure-text"
+  )}
         ${renderMetric("Passed on Both", summary.scenarioResults?.passedOnBoth ?? 0, "success-text")}
         ${renderMetric("Failed on Both", summary.scenarioResults?.failedOnBoth ?? 0, "failure-text")}
         ${renderMetric("Missing Features", (summary.features?.missingInEdge ?? 0) + (summary.features?.missingInChrome ?? 0))}

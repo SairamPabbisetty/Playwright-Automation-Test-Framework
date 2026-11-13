@@ -1,22 +1,13 @@
-
 const fs = require("node:fs");
 const path = require("node:path");
 const { getReportConfig } = require("../config/report.config");
 
 // Load Report Configuration
 const reportConfig = getReportConfig();
-
 const reportDir = reportConfig.reportDir;
 
-const jsonPath = path.join(
-  reportDir,
-  reportConfig.files.cucumberJson
-);
-
-const htmlPath = path.join(
-  reportDir,
-  reportConfig.files.html
-);
+const jsonPath = path.join(reportDir, reportConfig.files.cucumberJson);
+const htmlPath = path.join(reportDir, reportConfig.files.html);
 
 // Check HTML Report Configuration
 if (!reportConfig.generate.html) {
@@ -39,7 +30,6 @@ try {
   if (!Array.isArray(features)) {
     throw new Error("Expected the Cucumber report to be an array.");
   }
-
 } catch (error) {
   console.error("Failed to read Cucumber JSON:", error.message);
   process.exit(1);
@@ -47,13 +37,17 @@ try {
 
 // HTML Escaping
 const escapeHtml = (value) =>
-  String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[char],
+  );
 
 // Step Status
 const statusOf = (step) => {
@@ -74,13 +68,10 @@ const counts = {
   passed: 0,
   failed: 0,
   skipped: 0,
-  undefined: 0
+  undefined: 0,
 };
 
 let scenarioCount = 0;
-let scenarioPassed = 0;
-let scenarioFailed = 0;
-let scenarioSkipped = 0;
 
 const featureSections = [];
 
@@ -89,10 +80,7 @@ for (const feature of features) {
   const scenarios = [];
 
   for (const scenario of feature.elements ?? []) {
-    if (
-      scenario.type !== "scenario" &&
-      scenario.type !== "scenario_outline"
-    ) {
+    if (scenario.type !== "scenario" && scenario.type !== "scenario_outline") {
       continue;
     }
 
@@ -103,34 +91,54 @@ for (const feature of features) {
     let scenarioHasFailure = false;
     let scenarioHasUndefined = false;
 
-    const stepRows = steps.map((step) => {
-      const status = statusOf(step);
+    const stepRows = steps
+      .map((step) => {
+        const status = statusOf(step);
 
-      counts[status]++;
+        counts[status]++;
 
-      if (status === "failed") {
-        scenarioHasFailure = true;
-      }
+        if (status === "failed") {
+          scenarioHasFailure = true;
+        }
 
-      if (status === "undefined") {
-        scenarioHasUndefined = true;
-      }
+        if (status === "undefined") {
+          scenarioHasUndefined = true;
+        }
 
-      const durationNs = step.result?.duration ?? 0;
-      const duration = `${(durationNs / 1e9).toFixed(3)} s`;
-      const error = step.result?.error_message ?? "";
-      const keyword = step.keyword ?? "";
-      const text = step.name ?? "(unnamed step)";
+        const durationNs = step.result?.duration ?? 0;
+        const duration = `${(durationNs / 1e9).toFixed(3)} s`;
+        const error = step.result?.error_message ?? "";
+        const keyword = step.keyword ?? "";
+        const text = step.name ?? "(unnamed step)";
 
-      return `
+        const screenshots = (step.embeddings ?? [])
+          .filter(
+            (embedding) =>
+              embedding.mime_type?.startsWith("image/") && embedding.data,
+          )
+          .map(
+            (embedding, index) => `
+            <details class="screenshot">
+              <summary>View screenshot ${index + 1}</summary>
+              <img
+                src="data:${escapeHtml(embedding.mime_type)};base64,${embedding.data}"
+                alt="Failure screenshot ${index + 1}"
+              />
+            </details>
+          `,
+          )
+          .join("");
+
+        return `
         <div class="step ${status}">
           <div class="step-main">
             <span class="status-icon" aria-label="${status}">${{
-              passed: "✓",
-              failed: "✗",
-              skipped: "—",
-              undefined: "?"
-            }[status]}</span>
+            passed: "✓",
+            failed: "✗",
+            skipped: "—",
+            undefined: "?",
+          }[status]
+          }</span>
 
             <div class="step-content">
               <div class="step-title">
@@ -143,17 +151,22 @@ for (const feature of features) {
                 <span>${duration}</span>
               </div>
 
-              ${error ? `
-                <details class="error" open>
-                  <summary>Error details</summary>
-                  <pre>${escapeHtml(error)}</pre>
-                </details>
-              ` : ""}
+              ${error
+            ? `
+                    <details class="error" open>
+                      <summary>Error details</summary>
+                      <pre>${escapeHtml(error)}</pre>
+                    </details>
+                  `
+            : ""
+          }
+              ${screenshots}
             </div>
           </div>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
     const scenarioStatus = scenarioHasFailure
       ? "failed"
@@ -162,14 +175,6 @@ for (const feature of features) {
         : steps.some((step) => statusOf(step) === "skipped")
           ? "skipped"
           : "passed";
-
-    if (scenarioStatus === "passed") {
-      scenarioPassed++;
-    } else if (scenarioStatus === "failed") {
-      scenarioFailed++;
-    } else {
-      scenarioSkipped++;
-    }
 
     scenarios.push(`
       <section class="scenario">
@@ -200,10 +205,7 @@ for (const feature of features) {
 }
 
 // Build Report Summary
-const totalSteps = Object.values(counts).reduce(
-  (sum, count) => sum + count,
-  0
-);
+const totalSteps = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
 const generatedAt = new Date().toLocaleString();
 
@@ -220,29 +222,82 @@ const html = `<!doctype html>
   color: #202938;
   background: #f5f7fb;
 }
-* { box-sizing: border-box; }
-body { margin: 0; padding: 28px; }
-main { max-width: 1200px; margin: auto; }
-h1 { margin: 0 0 8px; font-size: 30px; }
-h2 { margin: 0 0 18px; font-size: 22px; }
-h3 { margin: 0; font-size: 17px; }
-.muted { color: #64748b; font-size: 13px; margin: 5px 0 0; }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 28px;
+}
+
+main {
+  max-width: 1200px;
+  margin: auto;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+}
+
+h2 {
+  margin: 0 0 18px;
+  font-size: 22px;
+}
+
+h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 13px;
+  margin: 5px 0 0;
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 12px;
   margin: 24px 0;
 }
-.card, .feature, .scenario {
+
+.card,
+.feature,
+.scenario {
   background: white;
   border: 1px solid #e1e6ef;
   border-radius: 10px;
 }
-.card { padding: 16px; }
-.card-label { color: #64748b; font-size: 13px; }
-.card-number { font-size: 29px; font-weight: 700; margin-top: 5px; }
-.feature { padding: 22px; margin: 20px 0; }
-.scenario { margin-top: 14px; overflow: hidden; }
+
+.card {
+  padding: 16px;
+}
+
+.card-label {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.card-number {
+  font-size: 29px;
+  font-weight: 700;
+  margin-top: 5px;
+}
+
+.feature {
+  padding: 22px;
+  margin: 20px 0;
+}
+
+.scenario {
+  margin-top: 14px;
+  overflow: hidden;
+}
+
 .scenario-heading {
   display: flex;
   align-items: center;
@@ -251,27 +306,151 @@ h3 { margin: 0; font-size: 17px; }
   padding: 16px;
   border-bottom: 1px solid #e8edf4;
 }
-.step { padding: 14px 16px; border-bottom: 1px solid #edf0f5; }
-.step:last-child { border-bottom: 0; }
-.step-main { display: flex; gap: 12px; align-items: flex-start; }
-.status-icon { font-weight: 800; font-size: 18px; width: 20px; text-align: center; }
-.step-content { flex: 1; min-width: 0; }
-.step-title { line-height: 1.5; overflow-wrap: anywhere; }
-.keyword { font-weight: 700; margin-right: 5px; }
-.step-meta { display: flex; gap: 12px; align-items: center; margin-top: 8px; color: #64748b; font-size: 12px; }
-.badge { display: inline-block; padding: 4px 8px; border-radius: 5px; font-size: 11px; font-weight: 800; }
-.passed .status-icon, .badge.passed { color: #137333; }
-.badge.passed { background: #e4f5e9; }
-.failed .status-icon, .badge.failed { color: #b42318; }
-.badge.failed { background: #fee4e2; }
-.skipped .status-icon, .badge.skipped { color: #8a6100; }
-.badge.skipped { background: #fff2cc; }
-.undefined .status-icon, .badge.undefined { color: #6941c6; }
-.badge.undefined { background: #eee7ff; }
-.error { margin-top: 12px; border: 1px solid #f2b8b5; background: #fff5f5; border-radius: 6px; padding: 10px; }
-.error summary { color: #b42318; font-weight: 700; cursor: pointer; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; margin-bottom: 0; }
-@media (max-width: 600px) { body { padding: 14px; } .feature { padding: 14px; } }
+
+.step {
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.step:last-child {
+  border-bottom: 0;
+}
+
+.step-main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.status-icon {
+  font-weight: 800;
+  font-size: 18px;
+  width: 20px;
+  text-align: center;
+}
+
+.step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.keyword {
+  font-weight: 700;
+  margin-right: 5px;
+}
+
+.step-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.passed .status-icon,
+.badge.passed {
+  color: #137333;
+}
+
+.badge.passed {
+  background: #e4f5e9;
+}
+
+.failed .status-icon,
+.badge.failed {
+  color: #b42318;
+}
+
+.badge.failed {
+  background: #fee4e2;
+}
+
+.skipped .status-icon,
+.badge.skipped {
+  color: #8a6100;
+}
+
+.badge.skipped {
+  background: #fff2cc;
+}
+
+.undefined .status-icon,
+.badge.undefined {
+  color: #6941c6;
+}
+
+.badge.undefined {
+  background: #eee7ff;
+}
+
+.error {
+  margin-top: 12px;
+  border: 1px solid #f2b8b5;
+  background: #fff5f5;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.error summary {
+  color: #b42318;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 14px;
+  }
+
+  .feature {
+    padding: 14px;
+  }
+}
+
+.screenshot {
+  margin-top: 12px;
+  border: 1px solid #b7d4f5;
+  background: #f0f7ff;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.screenshot summary {
+  color: #175cd3;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+}
 </style>
 </head>
 <body>
@@ -280,12 +459,30 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-heig
   <p class="muted">Generated: ${escapeHtml(generatedAt)}</p>
 
   <div class="summary">
-    <div class="card"><div class="card-label">Scenarios</div><div class="card-number">${scenarioCount}</div></div>
-    <div class="card"><div class="card-label">Passed steps</div><div class="card-number" style="color:#137333">${counts.passed}</div></div>
-    <div class="card"><div class="card-label">Failed steps</div><div class="card-number" style="color:#b42318">${counts.failed}</div></div>
-    <div class="card"><div class="card-label">Skipped steps</div><div class="card-number" style="color:#8a6100">${counts.skipped}</div></div>
-    <div class="card"><div class="card-label">Undefined steps</div><div class="card-number" style="color:#6941c6">${counts.undefined}</div></div>
-    <div class="card"><div class="card-label">Total steps</div><div class="card-number">${totalSteps}</div></div>
+    <div class="card">
+      <div class="card-label">Scenarios</div>
+      <div class="card-number">${scenarioCount}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Passed steps</div>
+      <div class="card-number" style="color:#137333">${counts.passed}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Failed steps</div>
+      <div class="card-number" style="color:#b42318">${counts.failed}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Skipped steps</div>
+      <div class="card-number" style="color:#8a6100">${counts.skipped}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Undefined steps</div>
+      <div class="card-number" style="color:#6941c6">${counts.undefined}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total steps</div>
+      <div class="card-number">${totalSteps}</div>
+    </div>
   </div>
 
   ${featureSections.join("") || "<p>No scenarios were found in the Cucumber JSON report.</p>"}
@@ -297,7 +494,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-heig
 try {
   fs.writeFileSync(htmlPath, html, "utf8");
   console.log(`HTML report generated: ${htmlPath}`);
-
 } catch (error) {
   console.error("Failed to generate HTML report:", error.message);
   process.exit(1);

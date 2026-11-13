@@ -395,8 +395,8 @@ async function main() {
     // Browser Execution Status
     browserExitCode =
       browserExitCode === 0 &&
-      reportExitCode === 0 &&
-      normalizationExitCode === 0
+        reportExitCode === 0 &&
+        normalizationExitCode === 0
         ? 0
         : 1;
 
@@ -408,7 +408,7 @@ async function main() {
       `\n${currentBrowser.toUpperCase()} execution exit code: ${browserExitCode}`
     );
   }
-  
+
   // Browser Comparison
   if (browsersToRun.length > 1) {
     console.log("\n========================================");
