@@ -8,9 +8,9 @@ A TypeScript UI automation framework for [Automation Exercise](https://automatio
 - Cucumber step definitions written in TypeScript.
 - Page objects and locator models that keep browser interactions out of step definitions.
 - Per-scenario browser setup and teardown through Cucumber hooks.
-- Chrome or Microsoft Edge execution in headed or headless mode.
-- Optional Selenium Grid availability validation.
-- Timestamped HTML reports for Cucumber runs.
+- Sequential Chrome, Microsoft Edge, or both-browser Cucumber execution in headed or headless mode.
+- Normalized Cucumber results and aggregate Chrome/Edge comparisons.
+- Timestamped HTML reports for individual browser runs and browser comparisons.
 - A Playwright Test smoke test with HTML reporting, screenshots, and traces on failure.
 - Strict TypeScript compiler settings for the test and framework source.
 
@@ -35,8 +35,13 @@ Playwright Repo/
 │   └── ui/
 │       ├── RegisterUser.feature
 │       └── TitleValidation.feature
+├── config/
+│   └── report.config.js
 ├── scripts/
+│   ├── compare-browser-results.js
+│   ├── generate-browser-comparison-report.js
 │   ├── generate-cucumber-report.js
+│   ├── normalize-cucumber-results.js
 │   └── run-cucumber.js
 ├── src/
 │   ├── models/
@@ -69,7 +74,7 @@ Playwright Repo/
 
 Generated output directories are not source code:
 
-- `reports/` contains timestamped Cucumber HTML reports.
+- `reports/` contains timestamped per-browser Cucumber reports and browser comparison reports.
 - `playwright-report/` contains the Playwright Test HTML report.
 - `test-results/` contains Playwright Test artifacts such as traces and screenshots.
 
@@ -80,24 +85,16 @@ These directories are excluded by `.gitignore`.
 ### Cucumber execution flow
 
 ```text
-Feature file
-    ↓
-Cucumber tag selection
-    ↓
-Step definitions
-    ↓
-Page object
-    ↓
-Locator model
-    ↓
-Playwright browser
-    ↓
-Cucumber JSON → generated HTML report
+Feature file → Cucumber tag selection → step definitions
+    → page object → locator model → Playwright browser
+    → Cucumber JSON → normalized results → HTML report
 ```
 
 `src/support/hooks.ts` launches a browser before each scenario, creates the browser context and page objects, and closes all resources afterward. Chrome is launched by default; Microsoft Edge is selected with `--browser=edge`. The `HEADLESS` environment variable controls headed/headless mode and defaults to headless when it is not set. `src/support/world.ts` exposes the browser and page objects to step definitions through the custom Cucumber World.
 
-The Cucumber runner also accepts `--grid=<url>`. It checks the Grid `/status` endpoint before starting the suite and stops execution if the Grid is unavailable. The current hooks still launch the configured local Playwright browser after that check; the Grid URL is not currently used to create a remote Playwright connection.
+When `--browser=all` is used, the runner executes Chrome and then Edge sequentially. Each browser writes its own raw Cucumber JSON, normalized JSON, and HTML report under the same execution directory. After both runs, the runner compares features, scenarios, steps, hooks, and matched scenario durations and generates aggregate JSON and HTML reports. A comparison is only generated when both browsers have normalized results.
+
+The runner accepts `--grid=<url>` and checks the Grid `/status` endpoint before starting the suite. This is currently an availability check only: the hooks launch browsers locally and do not connect Playwright sessions to Selenium Grid.
 
 Page objects represent the user-facing areas used by the current registration flow:
 
@@ -162,23 +159,24 @@ npm test
 The `test` script runs:
 
 ```text
-node scripts/run-cucumber.js --tag=@RegisterUser --headless=false --browser=edge --grid=http://localhost:4444
+node scripts/run-cucumber.js --tag=@RegisterUser --headless=false --browser=all --grid=http://localhost:4444
 ```
 
-This executes the `@RegisterUser` scenario in headed Microsoft Edge mode after checking that Selenium Grid is available at `http://localhost:4444`. The scenario creates a user with the data in `features/ui/RegisterUser.feature`, verifies the account, and deletes the account at the end. Because the current hooks use a local Playwright launch, Edge runs locally after the Grid check.
+This checks that Selenium Grid is available at `http://localhost:4444`, then runs the `@RegisterUser` scenario in headed mode first in Chrome and then in Microsoft Edge. Each browser runs locally. The scenario creates a user with the data in `features/ui/RegisterUser.feature`, verifies the account, and deletes the account at the end.
 
 ### Run Cucumber with a different tag, browser, or execution mode
 
-The runner accepts `--tag`, `--headless`, `--browser`, and `--grid` options:
+The runner accepts `--tag`, `--headless`, `--browser`, and `--grid` options. Supported browser values are `chrome`, `edge`, and `all`:
 
 ```powershell
 node scripts/run-cucumber.js --tag="@SmokeTest" --headless=true
 node scripts/run-cucumber.js --tag="@HomePage" --headless=false
 node scripts/run-cucumber.js --tag="@SmokeTest" --browser=edge --headless=true
+node scripts/run-cucumber.js --tag="@RegisterUser" --browser=all --headless=true
 node scripts/run-cucumber.js --tag="@SmokeTest" --browser=chrome --headless=true --grid=http://localhost:4444
 ```
 
-Use `--headless=true` or `--headless=false` explicitly. The supported browser values are `chrome` and `edge`; Chrome is the default. The Cucumber hooks default to headless mode when `HEADLESS` is not set. `--grid` accepts an `http` or `https` URL, validates the Grid status, and aborts if the Grid is unavailable.
+Chrome is the default browser. Use `--headless=true` or `--headless=false` explicitly; the Cucumber hooks default to headless mode when `HEADLESS` is not set. `--grid` accepts an `http` or `https` URL, validates the Grid status, and aborts if the Grid is unavailable. It does not enable remote browser execution.
 
 Available tags in the current feature files are:
 
@@ -208,26 +206,39 @@ npx playwright test --headed
 npx playwright show-report
 ```
 
-## Cucumber reports
+## Cucumber and browser comparison reports
 
-Every Cucumber run creates a unique report directory:
+Every runner invocation creates a unique execution directory using the local date, time, and a short unique ID:
 
 ```text
 reports/
-└── Oct2026/
-    └── 29-10-2026-23-21-59/
-        └── report.html
+└── Nov2026/
+    └── 13-11-2026-17-19-31-a1b2c3d4/
+        ├── chrome/
+        │   ├── cucumber-report.json
+        │   ├── normalized-results.json
+        │   └── report.html
+        ├── edge/
+        │   ├── cucumber-report.json
+        │   ├── normalized-results.json
+        │   └── report.html
+        └── comparison/
+            ├── comparison-results.json
+            └── comparison-report.html
 ```
 
-The directory name is generated from the local machine date and time as `reports/<MonYYYY>/<DD-MM-YYYY-HH-mm-ss>/`. The runner:
+The execution path format is `reports/<MonYYYY>/<DD-MM-YYYY-HH-mm-ss>-<8-character-id>/`. Single-browser runs have a folder for the selected browser; the `comparison/` folder is created for multi-browser runs.
 
-1. Creates the timestamped directory.
-2. Writes the temporary Cucumber JSON report there.
-3. Generates `report.html` using `scripts/generate-cucumber-report.js`.
-4. Removes the temporary JSON file after successful HTML generation.
-5. Opens the HTML report in the default Windows browser when available.
+Each browser's `report.html` includes scenario and step statuses, durations, totals, and failure details. For `--browser=all`, `comparison-results.json` contains aggregate feature, scenario, step, hook, functional-status, and matched-scenario performance data. `comparison-report.html` presents the comparison details and can be printed or saved as PDF. Reports open automatically when configured; if they do not, open the HTML files from the execution directory manually.
 
-If the browser does not open automatically, open the generated `report.html` manually. The report shows scenario and step statuses, durations, totals, and failure details.
+Comparison can also be run manually after normalized results for both browsers are available:
+
+```powershell
+node scripts/compare-browser-results.js ".\reports\Nov2026\<execution-id>"
+node scripts/generate-browser-comparison-report.js ".\reports\Nov2026\<execution-id>"
+```
+
+The first command writes `comparison/comparison-results.json`; the second creates `comparison/comparison-report.html`.
 
 To inspect generated reports from PowerShell:
 
@@ -249,12 +260,36 @@ The compiler includes `src/**/*.ts`, `tests/**/*.ts`, and `features/**/*.ts` and
 
 | File | Responsibility |
 | --- | --- |
-| `package.json` | Dependency manifest and `setup`/`test` npm scripts |
+| `package.json` | Dependency manifest and `setup`/`test` npm scripts; the default test runs registration on both browsers |
+| `config/report.config.js` | Central report paths and report-generation/opening options |
 | `cucumber.js` | Cucumber feature paths, TypeScript loading, hooks, step definitions, timeout, and JSON output |
-| `scripts/run-cucumber.js` | Tag, browser, headless, and Grid argument parsing; report directories; Cucumber launch; and report opening |
-| `scripts/generate-cucumber-report.js` | Converts Cucumber JSON into the local HTML report |
+| `scripts/run-cucumber.js` | Tag, browser, headless, and Grid validation; sequential runs; report generation; and browser comparison orchestration |
+| `scripts/normalize-cucumber-results.js` | Converts raw Cucumber JSON into browser-specific normalized results |
+| `scripts/compare-browser-results.js` | Matches Chrome and Edge features, scenarios, steps, and hooks and writes aggregate comparison JSON |
+| `scripts/generate-cucumber-report.js` | Converts Cucumber JSON into a browser-specific HTML report |
+| `scripts/generate-browser-comparison-report.js` | Creates the aggregate browser comparison HTML report |
 | `playwright.config.ts` | Playwright Test discovery, browser, URL, retries, workers, timeouts, and reporters |
 | `tsconfig.json` | Strict TypeScript compiler settings and included source paths |
+
+### Report options
+
+The centralized report configuration reads these environment variables. All options default to `true`:
+
+| Variable | Effect |
+| --- | --- |
+| `REPORT_CUCUMBER_JSON` | Generate raw Cucumber JSON (required for normalized JSON or HTML generation) |
+| `REPORT_NORMALIZED_JSON` | Generate normalized per-browser JSON |
+| `REPORT_HTML` | Generate per-browser Cucumber HTML reports |
+| `REPORT_OPEN_HTML` | Open generated HTML reports automatically on Windows |
+
+Set a variable to `false` to disable that output, for example in PowerShell:
+
+```powershell
+$env:REPORT_OPEN_HTML = "false"
+node scripts/run-cucumber.js --tag="@SmokeTest" --browser=all --headless=true
+```
+
+The runner rejects report settings that request normalized JSON or HTML while raw Cucumber JSON is disabled. Browser comparison requires normalized results for both browsers.
 
 ## Adding coverage
 
@@ -288,10 +323,13 @@ The framework currently covers:
 - Account deletion.
 - A standalone homepage smoke test.
 - Local Chrome and Microsoft Edge execution for Cucumber scenarios.
+- Sequential two-browser comparison with JSON and HTML reports.
 - Optional Selenium Grid availability validation before a Cucumber run.
 
-Remote browser execution through Selenium Grid, API testing, environment-specific configuration, CI/CD workflows, additional page objects, and expanded test data management are not currently implemented.
+Remote browser execution through Selenium Grid, API testing, CI/CD workflows, additional page objects, and expanded test data management are not currently implemented.
 
 ## Repository
 
 GitHub: https://github.com/SairamPabbisetty/Playwright-Automation-Test-Framework
+
+Documentation reflects the repository through commit [`6b74d24`](https://github.com/SairamPabbisetty/Playwright-Automation-Test-Framework/commit/6b74d24e919c72bd23f481421190ed6a79694a02) (`multi browser comparison - sequential`).
